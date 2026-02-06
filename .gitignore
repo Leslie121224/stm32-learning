@@ -1,0 +1,35 @@
+# --- 編譯產出物 (Build artifacts) ---
+Debug/
+Release/
+bin/
+obj/
+
+# --- 映像檔與執行檔 (Binary files) ---
+*.elf
+*.hex
+*.bin
+*.map
+*.list
+
+# --- 編譯過程的中間檔 (Intermediate files) ---
+*.o
+*.d
+*.su
+*.u_f
+*.crf
+*.axf
+*.htm
+*.dep
+
+# --- IDE 自動產生的本地配置 (Local configurations) ---
+.settings/
+.metadata/
+*.launch
+*.scvd
+*.bak
+*.uvguix.*
+*.uvoptx
+
+# --- 作業系統暫存檔 ---
+.DS_Store
+Thumbs.db
