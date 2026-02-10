@@ -56,6 +56,8 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+uint32_t last_tick = 0;
+uint32_t interval = 500; // ms
 
 /* USER CODE END 0 */
 
@@ -91,6 +93,7 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
+  uint32_t current_tick = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -101,9 +104,14 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 
-	  HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+	  current_tick = HAL_GetTick();
 
-	  HAL_Delay(500);	// delay 500ms
+	  if(current_tick - last_tick == interval)
+	  {
+		  HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+		  last_tick = current_tick;
+	  }
+
   }
   /* USER CODE END 3 */
 }
