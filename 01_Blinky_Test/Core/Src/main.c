@@ -106,9 +106,14 @@ int main(void)
 
 	  current_tick = HAL_GetTick();
 
-	  if(current_tick - last_tick == interval)
+	  if((HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5) == GPIO_PIN_RESET)&& (current_tick - last_tick == 10))
 	  {
-		  HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
+		  last_tick = current_tick;
+	  }
+	  else if((HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5) == GPIO_PIN_SET)&& (current_tick - last_tick == 90))
+	  {
+		  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
 		  last_tick = current_tick;
 	  }
 
