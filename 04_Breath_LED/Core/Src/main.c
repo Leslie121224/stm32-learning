@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "stdio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -54,6 +55,8 @@ volatile Breath_LED_t LED2 = {
 	.cur_brightness = 500,
 	.is_enabled = 1
 };
+
+uint8_t rx_data;	// store rx received data
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -105,6 +108,8 @@ int main(void)
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
 
   static uint8_t direction = 0; // 0 for brighter, 1 for darker
+
+  HAL_UART_Receive_IT(&huart2, &rx_data, 1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -138,8 +143,14 @@ int main(void)
 		  }
 
 		  HAL_Delay(LOOP_TIME_MS);	//ms
+		  Update_LED_Brightness(&LED2);
+
+		  char msg_buf[64];
+		  // sprintf can transfer my digits to string format, and it'll return how many bytes it cost.
+		  //Plus, sprintf will add a \0 at the end, it will occupied a byte in msg_buf, but it won't be counted to the length that sprintf return.
+		  int len = sprintf(msg_buf, "Duty Cycle: %d%%\r\n", LED2.cur_brightness);
+		  HAL_UART_Transmit(&huart2, (uint8_t*)msg_buf, len, 100);
 	  }
-	  Update_LED_Brightness(&LED2);
   }
   /* USER CODE END 3 */
 }
@@ -330,6 +341,29 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 			LED2.is_enabled = 1;
 	}
 
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	if(huart->Instance == USART2)
+	{
+		if(rx_data == 's') // stop LED breathing
+		{
+			LED2.is_enabled = 0;
+
+			char stop_msg[50];
+			int len = sprintf(stop_msg, "\r\n>>> LED STOP <<<\r\n");
+			HAL_UART_Transmit(&huart2, (uint8_t*)stop_msg, len, 100);
+		}
+		else if(rx_data == 'r')	// resume LED breathing
+		{
+			LED2.is_enabled = 1;
+			char start_msg[50];
+			int len = sprintf(start_msg, "\r\n>>> LED START <<<\r\n");
+			HAL_UART_Transmit(&huart2, (uint8_t*)start_msg, len, 100);
+		}
+	}
+	HAL_UART_Receive_IT(&huart2, &rx_data, 1);
 }
 /* USER CODE END 4 */
 
