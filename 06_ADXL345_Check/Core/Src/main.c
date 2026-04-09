@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "stdio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -57,7 +56,7 @@ I2C_HandleTypeDef hi2c1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-
+char msg[64];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -66,7 +65,9 @@ static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
-
+void ADXL345_Init(I2C_HandleTypeDef *hi2c);
+void ADXL345_Read_ID_UART(I2C_HandleTypeDef *hi2c, UART_HandleTypeDef *huart);
+HAL_StatusTypeDef ADXL345_Read_Raw(I2C_HandleTypeDef *hi2c, int16_t *x, int16_t *y, int16_t *z);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -106,11 +107,9 @@ int main(void)
   MX_USART2_UART_Init();
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
-
-  // Wake-Up ADXL
-  uint8_t power_cmd = (1<<3);	// bit3 = 1
-  HAL_I2C_Mem_Write(&hi2c1, ADXL_ADDR, ADXL_REG_POWER_CTL, 1, &power_cmd, 1, 100);
-
+  ADXL345_Init(&hi2c1);
+  ADXL345_Read_ID_UART(&hi2c1, &huart2);
+  int16_t x, y, z;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -120,42 +119,15 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  uint8_t id_val = 0;
-	  HAL_StatusTypeDef ADXL_STATUS;
 
-	  // HAL_I2C_Mem_Read(which I2C, device ID, register addr, register length(byte), put data at, data reading length, timeout);
-	  ADXL_STATUS = HAL_I2C_Mem_Read(&hi2c1, ADXL_ADDR, ADXL_REG_ID, 1, &id_val, 1, 100);
+	// Update XYZ data
+	if(ADXL345_Read_Raw(&hi2c1, &x, &y, &z) == HAL_OK)
+	{
+		int len = sprintf(msg, "X=%5d | Y=%5d | Z=%5d\r\n", x, y, z);
+		HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 100);
+	}
 
-	  char msg[64];
-	  if(ADXL_STATUS == HAL_OK)
-	  {
-		  int len = sprintf(msg, "connect is OK! ADXL345 ID is 0x%02X\r\n", id_val);
-		  HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 100);
-	  }
-	  else
-	  {
-		  int len = sprintf(msg, "ADXL connect has other BUGs!\r\n");
-		  if(ADXL_STATUS == HAL_BUSY)	len = sprintf(msg, "ADXL connect is BUSY!\r\n");
-		  if(ADXL_STATUS == HAL_ERROR)	len = sprintf(msg, "ADXL connect is ERROR!\r\n");
-		  if(ADXL_STATUS == HAL_TIMEOUT)	len = sprintf(msg, "ADXL connect is TIMEOUT!\r\n");
-		  HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 100);
-	  }
-
-	  // get XYZ data
-	  uint8_t raw_data[6];
-	  uint16_t x, y, z;
-
-	  if(HAL_I2C_Mem_Read(&hi2c1, ADXL_ADDR, ADXL_REG_DATAX0, 1, raw_data, 6, 100) == HAL_OK)
-	  {
-		  x = (int16_t)((raw_data[1]<<8) | raw_data[0]);
-		  y = (int16_t)((raw_data[3]<<8) | raw_data[2]);
-		  z = (int16_t)((raw_data[5]<<8) | raw_data[4]);
-
-		  int len = sprintf(msg, "X=%5d | Y=%5d | Z=%5d\r\n", x, y, z);
-		  HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 100);
-	  }
-
-	  HAL_Delay(100);
+	HAL_Delay(300);
   }
   /* USER CODE END 3 */
 }
@@ -313,6 +285,48 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+void ADXL345_Init(I2C_HandleTypeDef *hi2c)
+{
+	uint8_t power_cmd = (1<<3);	// Wake-Up ADXL // bit3 = 1
+	HAL_I2C_Mem_Write(hi2c, ADXL_ADDR, ADXL_REG_POWER_CTL, 1, &power_cmd, 1, 100);
+}
+
+void ADXL345_Read_ID_UART(I2C_HandleTypeDef *hi2c, UART_HandleTypeDef *huart)
+{
+	uint8_t id_val = 0;
+	HAL_StatusTypeDef ADXL_STATUS;
+
+	// HAL_I2C_Mem_Read(which I2C, device ID, register addr, register length(byte), put data at, data reading length, timeout);
+	ADXL_STATUS = HAL_I2C_Mem_Read(hi2c, ADXL_ADDR, ADXL_REG_ID, 1, &id_val, 1, 100);
+
+	if(ADXL_STATUS == HAL_OK)
+	{
+		int len = sprintf(msg, "connect is OK! ADXL345 ID is 0x%02X\r\n", id_val);
+		HAL_UART_Transmit(huart, (uint8_t*)msg, len, 100);
+	}
+	else
+	{
+		int len = sprintf(msg, "ADXL connect has other BUGs!\r\n");
+		if(ADXL_STATUS == HAL_BUSY)	len = sprintf(msg, "ADXL connect is BUSY!\r\n");
+		if(ADXL_STATUS == HAL_ERROR)	len = sprintf(msg, "ADXL connect is ERROR!\r\n");
+		if(ADXL_STATUS == HAL_TIMEOUT)	len = sprintf(msg, "ADXL connect is TIMEOUT!\r\n");
+		HAL_UART_Transmit(huart, (uint8_t*)msg, len, 100);
+	}
+}
+
+HAL_StatusTypeDef ADXL345_Read_Raw(I2C_HandleTypeDef *hi2c, int16_t *x, int16_t *y, int16_t *z)
+{
+	uint8_t raw_data[6];
+	HAL_StatusTypeDef status = HAL_I2C_Mem_Read(hi2c, ADXL_ADDR, ADXL_REG_DATAX0, 1, raw_data, 6, 100);
+	if(status == HAL_OK)
+	{
+	  *x = (int16_t)((raw_data[1]<<8) | raw_data[0]);
+	  *y = (int16_t)((raw_data[3]<<8) | raw_data[2]);
+	  *z = (int16_t)((raw_data[5]<<8) | raw_data[4]);
+	}
+	return status;
+}
+
 
 /* USER CODE END 4 */
 
