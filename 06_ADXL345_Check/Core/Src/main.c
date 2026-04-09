@@ -33,7 +33,17 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define ADXL_ADDR (0x53<<1)	// ADXL345 device ID
-#define ADXL_REG_ID 0x00	// ADXL345 ID register address
+
+// ADXL345 register address
+#define ADXL_REG_ID 0x00	// ID
+#define ADXL_REG_POWER_CTL 0x2D	// Power Control
+#define ADXL_REG_DATAX0 0x32	// DATA X0
+#define ADXL_REG_DATAX1 0x33	// DATA X1
+#define ADXL_REG_DATAY0 0x34	// DATA Y0
+#define ADXL_REG_DATAY1 0x35	// DATA Y1
+#define ADXL_REG_DATAZ0 0x36	// DATA Z0
+#define ADXL_REG_DATAZ1 0x37	// DATA Z1
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -97,6 +107,10 @@ int main(void)
   MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
 
+  // Wake-Up ADXL
+  uint8_t power_cmd = (1<<3);	// bit3 = 1
+  HAL_I2C_Mem_Write(&hi2c1, ADXL_ADDR, ADXL_REG_POWER_CTL, 1, &power_cmd, 1, 100);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -127,7 +141,21 @@ int main(void)
 		  HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 100);
 	  }
 
-	  HAL_Delay(500);
+	  // get XYZ data
+	  uint8_t raw_data[6];
+	  uint16_t x, y, z;
+
+	  if(HAL_I2C_Mem_Read(&hi2c1, ADXL_ADDR, ADXL_REG_DATAX0, 1, raw_data, 6, 100) == HAL_OK)
+	  {
+		  x = (int16_t)((raw_data[1]<<8) | raw_data[0]);
+		  y = (int16_t)((raw_data[3]<<8) | raw_data[2]);
+		  z = (int16_t)((raw_data[5]<<8) | raw_data[4]);
+
+		  int len = sprintf(msg, "X=%5d | Y=%5d | Z=%5d\r\n", x, y, z);
+		  HAL_UART_Transmit(&huart2, (uint8_t*)msg, len, 100);
+	  }
+
+	  HAL_Delay(100);
   }
   /* USER CODE END 3 */
 }
