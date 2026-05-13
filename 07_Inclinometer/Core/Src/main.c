@@ -34,7 +34,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define oled_sensitivity 45 // suggesting range: 45~180
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -51,8 +51,10 @@ UART_HandleTypeDef huart2;
 char oled_buf[32];
 double roll_offset = 0;
 double pitch_offset = 0;
+double yaw_offset = 0;
 volatile double roll_deg = 0;
 volatile double pitch_deg = 0;
+volatile double yaw_deg = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -62,6 +64,8 @@ static void MX_USART2_UART_Init(void);
 static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
 void I2C_Bus_Unlock(void);
+void convertRawToAngle(double *roll_final, double *pitch_final, double *yaw_final, int16_t x, int16_t y, int16_t z);
+void mapAngleToPixel(uint8_t *oled_x, uint8_t *oled_y, double angle_x, double angle_y);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -119,27 +123,23 @@ int main(void)
 	if(ADXL345_Read_Raw(&hi2c1, &x, &y, &z) == HAL_OK)
 	{
 		// calculate angle
-		double roll_rad = atan2((double)y,(double)z);
-		double pitch_rad = atan2((double)x,(double)z);
+		double roll_final, pitch_final, yaw_final;
+		convertRawToAngle(&roll_final, &pitch_final, &yaw_final, x, y, z);
 
-		roll_deg = roll_rad * (180.0 / M_PI);
-		pitch_deg = pitch_rad * (180.0 / M_PI);
+		// map to pixel
+		uint8_t final_x, final_y;
+		mapAngleToPixel(&final_x, &final_y, roll_final, pitch_final);	// convert angle to coordinate in ssd1306 oled 128x32
 
-
+		// update oled
 		ssd1306_Fill(Black);
 
-		sprintf(oled_buf, "Roll:%5.1f deg", (roll_deg-roll_offset) * -1);
-		ssd1306_SetCursor(0, 0);
-		ssd1306_WriteString(oled_buf, Font_7x10, White);
-
-		sprintf(oled_buf, "Pitch:%5.1f deg", (pitch_deg-pitch_offset) * -1);
-		ssd1306_SetCursor(0, 18);
-		ssd1306_WriteString(oled_buf, Font_7x10, White);
+		ssd1306_DrawPixel(final_x, final_y, White);
+		ssd1306_DrawPixel(final_x+1, final_y, White);
+		ssd1306_DrawPixel(final_x, final_y+1, White);
+		ssd1306_DrawPixel(final_x+1, final_y+1, White);
 
 		ssd1306_UpdateScreen(&hi2c1);
 	}
-
-	HAL_Delay(100);
   }
   /* USER CODE END 3 */
 }
@@ -335,6 +335,44 @@ void I2C_Bus_Unlock(void)
 		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9, GPIO_PIN_SET);	// SDA = 1
 	}
 }
+
+void convertRawToAngle(double *roll_final, double *pitch_final, double *yaw_final, int16_t x, int16_t y, int16_t z)
+{
+	double roll_rad = atan2((double)y,(double)z);
+	double pitch_rad = atan2((double)x,(double)z);
+	double yaw_rad = atan2((double)y,(double)x);
+
+	roll_deg = roll_rad * (180.0 / M_PI);
+	pitch_deg = pitch_rad * (180.0 / M_PI);
+	yaw_deg = yaw_rad * (180.0 / M_PI);
+
+	*roll_final = (roll_deg-roll_offset) * -1; 	// -180~180 degree
+	*pitch_final = (pitch_deg-pitch_offset) * -1;	// -180~180 degree
+	*yaw_final = (yaw_deg-yaw_offset) * -1;	// -180~180 degree
+
+}
+
+void mapAngleToPixel(uint8_t *oled_x, uint8_t *oled_y, double angle_x, double angle_y)
+{
+	if(angle_x > oled_sensitivity)	angle_x = oled_sensitivity;
+	if(angle_x < -oled_sensitivity)	angle_x = -oled_sensitivity;
+	if(angle_y > oled_sensitivity)	angle_y = oled_sensitivity;
+	if(angle_y < -oled_sensitivity)	angle_y = -oled_sensitivity;
+
+	double cal_x = (SSD1306_WIDTH/2.0-1) + angle_x / oled_sensitivity * (SSD1306_WIDTH/2.0-1);
+	double cal_y = (SSD1306_HEIGHT/2.0-1) + angle_y / oled_sensitivity * (SSD1306_HEIGHT/2.0-1);
+
+	int16_t protect_x = (int16_t)cal_x;
+	int16_t protect_y = (int16_t)cal_y;
+
+	if(protect_x < 0)	protect_x = 0;
+	if(protect_x > (SSD1306_WIDTH-2))	protect_x = (SSD1306_WIDTH-2);
+	if(protect_y < 0)	protect_y = 0;
+	if(protect_y > (SSD1306_HEIGHT-2))	protect_y = (SSD1306_HEIGHT-2);
+
+	*oled_x = (uint8_t)protect_x;
+	*oled_y = (uint8_t)protect_y;
+}
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
 	if(GPIO_Pin == B1_Pin)
@@ -342,6 +380,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 		// push button to calibrate offsets
 		roll_offset = roll_deg;
 		pitch_offset = pitch_deg;
+		yaw_offset = yaw_deg;
 	}
 }
 /* USER CODE END 4 */
